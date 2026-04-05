@@ -150,7 +150,7 @@ All graders return a score in `[0.0, 1.0]` and are fully deterministic at `seed=
 - Extreme signal noise (`misinfo_probability` as low as 0.45 for fake posts). Frequent brigading (~40% of real posts). Campaign posts have `factcheck_confidence` permanently frozen at 0.1.
 - **Grader:** `0.4 × campaign_detection + 0.35 × non_campaign_accuracy + 0.25 × harm_reduction`
   - Heavy penalty if real post protection < 40% (`−0.3`)
-- *Expected smart agent score: 0.50 – 0.75 | Random agent: ~0.2 – 0.4*
+- *Expected smart agent score: 0.50 – 0.75 (Baseline LLM Score: 0.560) | Random agent: ~0.2 – 0.4*
 
 ---
 
