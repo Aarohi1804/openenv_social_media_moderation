@@ -97,9 +97,9 @@ class SocialMediaModerationEnvironment(Environment):
 
     SUPPORTS_CONCURRENT_SESSIONS: bool = True
 
-    def __init__(self, task_id: int = 1):
-        self.task_id = task_id
-        self.config = TASK_CONFIGS[task_id]
+    def __init__(self, task_id= 1):
+        self.task_id = int(task_id)
+        self.config = TASK_CONFIGS[self.task_id]
 
         self._state = State(episode_id=str(uuid.uuid4()), step_count=0)
         self._posts: List[Dict] = []
@@ -123,13 +123,13 @@ class SocialMediaModerationEnvironment(Environment):
 
     # ─── Reset ────────────────────────────────────────────────────────────────
 
-    def reset(self, seed: int = 42, task_id: int = None, **kwargs) -> ModerationObservation:
+    def reset(self, seed: int = 42, task_id=None, **kwargs) -> ModerationObservation:
         """Reset the environment and start a new episode."""
         random.seed(seed)
 
         if task_id is not None:
-            self.task_id = task_id
-            self.config = TASK_CONFIGS[task_id]
+            self.task_id = int(task_id)
+            self.config = TASK_CONFIGS[self.task_id]
 
         self._state = State(episode_id=str(uuid.uuid4()), step_count=0)
         self._current_post_index = 0
@@ -451,8 +451,105 @@ class SocialMediaModerationEnvironment(Environment):
 
     # ─── Grader ───────────────────────────────────────────────────────────────
 
+    # def get_grader_score(self) -> float:
+    #     """Calculate final grader score. Returns float between 0.0 and 1.0"""
+    #     if self.task_id == 1:
+    #         return self._grade_task1()
+    #     elif self.task_id == 2:
+    #         return self._grade_task2()
+    #     else:
+    #         return self._grade_task3()
+
+    # def _grade_task1(self) -> float:
+    #     """
+    #     Task 1 grader — Basic Moderation.
+    #     Score = 60% fake control + 40% real protection
+    #     """
+    #     fake_control = (
+    #         self._fake_posts_actioned / self._total_fake
+    #         if self._total_fake > 0 else 0.0
+    #     )
+    #     real_protection = (
+    #         self._real_posts_protected / self._total_real
+    #         if self._total_real > 0 else 0.0
+    #     )
+    #     over_deletion_penalty = min(
+    #         self._delete_count / max(self._total_posts_processed, 1), 1.0
+    #     )
+    #     penalty = 0.2 if over_deletion_penalty > 0.8 else 0.0
+
+    #     score = (0.6 * fake_control) + (0.4 * real_protection) - penalty
+    #     return round(min(max(score, 0.0), 1.0), 3)
+
+    # def _grade_task2(self) -> float:
+    #     """
+    #     Task 2 grader — Balancing Act.
+    #     Score = 50% fake control + 35% real protection + 15% early action
+    #     """
+    #     fake_control = (
+    #         self._fake_posts_actioned / self._total_fake
+    #         if self._total_fake > 0 else 0.0
+    #     )
+    #     real_protection = (
+    #         self._real_posts_protected / self._total_real
+    #         if self._total_real > 0 else 0.0
+    #     )
+    #     early_action_rate = (
+    #         self._early_actions / self._total_fake
+    #         if self._total_fake > 0 else 0.0
+    #     )
+    #     balance_penalty = 0.2 if (fake_control > 0 and real_protection < 0.3) else 0.0
+
+    #     score = (
+    #         (0.50 * fake_control)
+    #         + (0.35 * real_protection)
+    #         + (0.15 * early_action_rate)
+    #         - balance_penalty
+    #     )
+    #     return round(min(max(score, 0.0), 1.0), 3)
+
+    # def _grade_task3(self) -> float:
+    #     """
+    #     Task 3 grader — Campaign Detection.
+    #     Score = 40% campaign detection + 35% non-campaign accuracy + 25% harm reduction
+    #     """
+    #     campaign_detection = (
+    #         self._campaign_posts_actioned / self.config["campaign_size"]
+    #         if self.config["campaign_size"] > 0 else 0.0
+    #     )
+    #     non_campaign_fake = self._total_fake - self.config["campaign_size"]
+    #     non_campaign_actioned = self._fake_posts_actioned - self._campaign_posts_actioned
+    #     non_campaign_accuracy = (
+    #         non_campaign_actioned / non_campaign_fake
+    #         if non_campaign_fake > 0 else 0.0
+    #     )
+    #     max_possible_spread = sum(p["true_virality"] for p in self._posts if p["is_fake"])
+    #     harm_reduction = (
+    #         1.0 - (self._total_spread_allowed / max_possible_spread)
+    #         if max_possible_spread > 0 else 1.0
+    #     )
+    #     real_protection = (
+    #         self._real_posts_protected / self._total_real
+    #         if self._total_real > 0 else 0.0
+    #     )
+    #     if real_protection < 0.4:
+    #         protection_penalty = 0.3
+    #     elif real_protection < 0.6:
+    #         protection_penalty = 0.15
+    #     else:
+    #         protection_penalty = 0.0
+
+    #     score = (
+    #         (0.40 * campaign_detection)
+    #         + (0.35 * non_campaign_accuracy)
+    #         + (0.25 * harm_reduction)
+    #         - protection_penalty
+    #     )
+    #     return round(min(max(score, 0.0), 1.0), 3)
+    # ─── Grader ───────────────────────────────────────────────────────────────
+
     def get_grader_score(self) -> float:
-        """Calculate final grader score. Returns float between 0.0 and 1.0"""
+        """Calculate final grader score. Returns float strictly between 0 and 1."""
         if self.task_id == 1:
             return self._grade_task1()
         elif self.task_id == 2:
@@ -461,77 +558,42 @@ class SocialMediaModerationEnvironment(Environment):
             return self._grade_task3()
 
     def _grade_task1(self) -> float:
-        """
-        Task 1 grader — Basic Moderation.
-        Score = 60% fake control + 40% real protection
-        """
-        fake_control = (
-            self._fake_posts_actioned / self._total_fake
-            if self._total_fake > 0 else 0.0
-        )
-        real_protection = (
-            self._real_posts_protected / self._total_real
-            if self._total_real > 0 else 0.0
-        )
-        over_deletion_penalty = min(
-            self._delete_count / max(self._total_posts_processed, 1), 1.0
-        )
+        """Task 1 grader — Basic Moderation."""
+        fake_control = (self._fake_posts_actioned / self._total_fake if self._total_fake > 0 else 0.0)
+        real_protection = (self._real_posts_protected / self._total_real if self._total_real > 0 else 0.0)
+        
+        over_deletion_penalty = min(self._delete_count / max(self._total_posts_processed, 1), 1.0)
         penalty = 0.2 if over_deletion_penalty > 0.8 else 0.0
 
         score = (0.6 * fake_control) + (0.4 * real_protection) - penalty
-        return round(min(max(score, 0.0), 1.0), 3)
+        # THE FIX: Clamp strictly between 0.001 and 0.999
+        return round(max(0.001, min(0.999, score)), 3)
 
     def _grade_task2(self) -> float:
-        """
-        Task 2 grader — Balancing Act.
-        Score = 50% fake control + 35% real protection + 15% early action
-        """
-        fake_control = (
-            self._fake_posts_actioned / self._total_fake
-            if self._total_fake > 0 else 0.0
-        )
-        real_protection = (
-            self._real_posts_protected / self._total_real
-            if self._total_real > 0 else 0.0
-        )
-        early_action_rate = (
-            self._early_actions / self._total_fake
-            if self._total_fake > 0 else 0.0
-        )
+        """Task 2 grader — Balancing Act."""
+        fake_control = (self._fake_posts_actioned / self._total_fake if self._total_fake > 0 else 0.0)
+        real_protection = (self._real_posts_protected / self._total_real if self._total_real > 0 else 0.0)
+        early_action_rate = (self._early_actions / self._total_fake if self._total_fake > 0 else 0.0)
+        
         balance_penalty = 0.2 if (fake_control > 0 and real_protection < 0.3) else 0.0
 
-        score = (
-            (0.50 * fake_control)
-            + (0.35 * real_protection)
-            + (0.15 * early_action_rate)
-            - balance_penalty
-        )
-        return round(min(max(score, 0.0), 1.0), 3)
+        score = ((0.50 * fake_control) + (0.35 * real_protection) + (0.15 * early_action_rate) - balance_penalty)
+        # THE FIX: Clamp strictly between 0.001 and 0.999
+        return round(max(0.001, min(0.999, score)), 3)
 
     def _grade_task3(self) -> float:
-        """
-        Task 3 grader — Campaign Detection.
-        Score = 40% campaign detection + 35% non-campaign accuracy + 25% harm reduction
-        """
-        campaign_detection = (
-            self._campaign_posts_actioned / self.config["campaign_size"]
-            if self.config["campaign_size"] > 0 else 0.0
-        )
+        """Task 3 grader — Campaign Detection."""
+        campaign_detection = (self._campaign_posts_actioned / self.config["campaign_size"] if self.config["campaign_size"] > 0 else 0.0)
+        
         non_campaign_fake = self._total_fake - self.config["campaign_size"]
         non_campaign_actioned = self._fake_posts_actioned - self._campaign_posts_actioned
-        non_campaign_accuracy = (
-            non_campaign_actioned / non_campaign_fake
-            if non_campaign_fake > 0 else 0.0
-        )
+        non_campaign_accuracy = (non_campaign_actioned / non_campaign_fake if non_campaign_fake > 0 else 0.0)
+        
         max_possible_spread = sum(p["true_virality"] for p in self._posts if p["is_fake"])
-        harm_reduction = (
-            1.0 - (self._total_spread_allowed / max_possible_spread)
-            if max_possible_spread > 0 else 1.0
-        )
-        real_protection = (
-            self._real_posts_protected / self._total_real
-            if self._total_real > 0 else 0.0
-        )
+        harm_reduction = (1.0 - (self._total_spread_allowed / max_possible_spread) if max_possible_spread > 0 else 1.0)
+        
+        real_protection = (self._real_posts_protected / self._total_real if self._total_real > 0 else 0.0)
+        
         if real_protection < 0.4:
             protection_penalty = 0.3
         elif real_protection < 0.6:
@@ -539,10 +601,6 @@ class SocialMediaModerationEnvironment(Environment):
         else:
             protection_penalty = 0.0
 
-        score = (
-            (0.40 * campaign_detection)
-            + (0.35 * non_campaign_accuracy)
-            + (0.25 * harm_reduction)
-            - protection_penalty
-        )
-        return round(min(max(score, 0.0), 1.0), 3)
+        score = ((0.40 * campaign_detection) + (0.35 * non_campaign_accuracy) + (0.25 * harm_reduction) - protection_penalty)
+        # THE FIX: Clamp strictly between 0.001 and 0.999
+        return round(max(0.001, min(0.999, score)), 3)
