@@ -1,18 +1,10 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
-#
-# This source code is licensed under the BSD-style license found in the
-# LICENSE file in the root directory of this source tree.
-
-"""
-FastAPI application for the Social Media Moderation Environment.
-"""
 
 import sys
 import os
 
 # ─── INDESTRUCTIBLE IMPORT FIX ──────────────────────────────────────────────
-# Point Python to the root directory to find models.py
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if root_dir not in sys.path:
     sys.path.append(root_dir)
@@ -22,7 +14,6 @@ try:
 except Exception as e:
     raise ImportError("openenv is required. Install dependencies with 'uv sync'") from e
 
-# Now these imports will work perfectly on the Scaler server
 from models import ModerationAction, ModerationObservation
 from server.social_media_moderation_env_environment import SocialMediaModerationEnvironment
 
@@ -34,6 +25,44 @@ app = create_app(
     env_name="social_media_moderation_env",
     max_concurrent_envs=100,
 )
+
+# ───  FIX: EXPLICIT ENDPOINTS ─────────────────────────
+@app.get("/tasks")
+def get_tasks():
+    return {
+        "tasks": [
+            {
+                "id": "task_easy",
+                "name": "Social Media: Content Moderation (Easy)",
+                "description": "Identify and remove fake posts while protecting real content.",
+                "difficulty": "easy"
+            },
+            {
+                "id": "task_medium",
+                "name": "Social Media: Advanced Filtering (Medium)",
+                "description": "Handle complex moderation scenarios with a focus on early detection.",
+                "difficulty": "medium"
+            },
+            {
+                "id": "task_hard",
+                "name": "Social Media: Campaign Suppression (Hard)",
+                "description": "Mitigate viral fake news campaigns and reduce harmful spread.",
+                "difficulty": "hard"
+            }
+        ],
+        "action_schema": ModerationAction.model_json_schema()
+    }
+
+@app.get("/grader")
+def get_grader():
+    try:
+        env_instance = list(app.state.envs.values())[0] 
+        raw_score = env_instance.get_grader_score()
+    except Exception:
+        raw_score = 0.01
+
+    return {"score": float(max(0.01, min(0.99, raw_score)))}
+# ──────────────────────────────────────────────────────────────────────────
 
 def main(host: str = "0.0.0.0", port: int = 8000):
     """Entry point for direct execution."""

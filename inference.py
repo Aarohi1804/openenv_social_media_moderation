@@ -5,42 +5,32 @@ import sys
 from typing import List, Optional
 from openai import OpenAI
 
-# Ensure Python looks in the current directory for models and client
+# Ensure Python looks in the current directory for models
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# Import your actual environment and action models
 from models import ModerationAction
 from client import SocialMediaModerationEnv
 
-# ─── MANDATORY CONFIGURATION ──────────────────────────────────────────────────
-# Judges will inject these environment variables to point to their models.
+# ─── MODERATOR MANDATORY CONFIGURATION ────────────────────────────────────────
 API_KEY = os.getenv("HF_TOKEN") or os.getenv("OPENAI_API_KEY")
 API_BASE_URL = os.getenv("API_BASE_URL") or "https://api.groq.com/openai/v1"
 MODEL_NAME = os.getenv("MODEL_NAME") or "llama-3.3-70b-versatile"
-
-# CRITICAL FIX: Allows the grader to point the agent to a remote Space URL
 ENV_URL = os.getenv("ENV_URL", "http://localhost:8000") 
-
-# Environment Metadata
-TASK_NAME = os.getenv("MODERATION_TASK", "Task 3")
 BENCHMARK = "social-media-moderation-env"
 
-# Logic Constraints
 MAX_STEPS = 20 
 TEMPERATURE = 0.0 
 SUCCESS_SCORE_THRESHOLD = 0.5 
 
 SYSTEM_PROMPT = """You are an AI content moderator.
-You must respond with ONLY ONE of these words: ALLOW, LABEL_WARNING, REDUCE_REACH, DELETE, ESCALATE.
-
+Respond with ONLY ONE of these words: ALLOW, LABEL_WARNING, REDUCE_REACH, DELETE, ESCALATE.
 Rules:
 1. If misinfo_probability > 0.65: DELETE.
 2. If misinfo_probability 0.50-0.65: REDUCE_REACH.
 3. If misinfo_probability < 0.50: ALLOW.
-4. If factcheck_confidence < 0.3 AND unsure: ESCALATE.
-No explanation. Just the action word."""
+4. If factcheck_confidence < 0.3 AND unsure: ESCALATE."""
 
-# ─── MANDATORY LOGGING FORMAT ─────────────────────────────────────────────────
+# ─── MANDATORY LOGGING FORMAT (FLUSH=TRUE) ────────────────────────────────────
 def log_start(task: str, env: str, model: str) -> None:
     print(f"[START] task={task} env={env} model={model}", flush=True)
 
@@ -49,14 +39,13 @@ def log_step(step: int, action: str, reward: float, done: bool, error: Optional[
     done_val = str(done).lower()
     print(f"[STEP] step={step} action={action} reward={reward:.2f} done={done_val} error={error_val}", flush=True)
 
-def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
+def log_end(success: bool, steps: int, score: float, rewards: List[float], task: str) -> None:
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
-    print(f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}", flush=True)
+    # MODERATOR FIX: Adding task to the END log just to be super safe
+    print(f"[END] task={task} success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}", flush=True)
 
-# ─── AGENT LOGIC ──────────────────────────────────────────────────────────────
 def get_model_action(client: OpenAI, obs) -> str:
     try:
-        # Compatibility check for Pydantic v1 vs v2
         obs_text = f"Observation: {obs.model_dump_json()}" if hasattr(obs, 'model_dump_json') else f"Observation: {obs.json()}"
     except Exception:
         obs_text = str(obs)
@@ -72,64 +61,56 @@ def get_model_action(client: OpenAI, obs) -> str:
             max_tokens=10,
         )
         action = completion.choices[0].message.content.strip().upper()
-        
-        # Fallback validation to ensure the model output is a valid action
         for valid in ["ALLOW", "LABEL_WARNING", "REDUCE_REACH", "DELETE", "ESCALATE"]:
-            if valid in action: 
-                return valid
+            if valid in action: return valid
         return "ALLOW"
     except Exception:
         return "ALLOW"
 
 async def main() -> None:
-    # Initialize OpenAI Client (OpenAI-compatible)
     client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
     
-    rewards = []
-    steps_taken = 0
-    score = 0.0
-    success = False
+    # MODERATOR FIX: We must test ALL 3 tasks, and the IDs must match YAML exactly.
+    tasks_to_test = ["task_easy", "task_medium", "task_hard"]
     
-    log_start(task=TASK_NAME, env=BENCHMARK, model=MODEL_NAME)
-
     async with SocialMediaModerationEnv(base_url=ENV_URL) as env:
-        try:
-            # We hardcode task_id=3 here as it's the "Hard" task required for evaluation
-            result = await env.reset(task_id=3) 
+        for current_task in tasks_to_test:
+            rewards = []
+            steps_taken = 0
+            score = 0.01
+            success = False
             
-            for step in range(1, MAX_STEPS + 1):
-                if result.done:
-                    break
+            # 1. Print exact [START] log
+            log_start(task=current_task, env=BENCHMARK, model=MODEL_NAME)
 
-                action_str = get_model_action(client, result.observation)
-                result = await env.step(ModerationAction(action=action_str))
+            try:
+                result = await env.reset(task_id=current_task) 
                 
-                reward = result.reward or 0.0
-                rewards.append(reward)
-                steps_taken = step
+                for step in range(1, MAX_STEPS + 1):
+                    if result.done: break
+                    action_str = get_model_action(client, result.observation)
+                    result = await env.step(ModerationAction(action=action_str))
+                    
+                    reward = result.reward or 0.0
+                    rewards.append(reward)
+                    steps_taken = step
+                    log_step(step=step, action=action_str, reward=reward, done=result.done, error=None)
+
+                # 2. Strict clamp calculation
+                if rewards:
+                    raw_score = sum(rewards) / len(rewards)
+                    score = float(max(0.01, min(0.99, raw_score))) 
+                else:
+                    score = 0.01 
                 
-                log_step(step=step, action=action_str, reward=reward, done=result.done, error=None)
+                success = score >= SUCCESS_SCORE_THRESHOLD
 
-            # Calculation for the summary report
-           # Calculation for the summary report
-            if rewards:
-                raw_score = sum(rewards) / len(rewards)
-                # SIR'S FIX: Strict clamp
-                score = float(max(0.01, min(0.99, raw_score))) 
-            else:
-                score = 0.01 # Fallback for empty input
-            
-            success = score >= SUCCESS_SCORE_THRESHOLD
-
-            # Save the outputs properly
-            os.makedirs("outputs", exist_ok=True)
-            with open("outputs/inference_results.json", "w") as f:
-                json.dump({"score": score, "steps": steps_taken, "rewards": rewards}, f)
-
-        except Exception as e:
-            print(f"Error during inference: {e}")
-        finally:
-            log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
+            except Exception as e:
+                print(f"Error during inference: {e}")
+                score = 0.01 # Fallback for safety
+            finally:
+                # 3. Print exact [END] log
+                log_end(success=success, steps=steps_taken, score=score, rewards=rewards, task=current_task)
 
 if __name__ == "__main__":
     asyncio.run(main())
