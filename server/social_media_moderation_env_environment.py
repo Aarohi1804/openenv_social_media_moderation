@@ -513,15 +513,28 @@ class SocialMediaModerationEnvironment(Environment):
         return min(0.1 + (step * self.config["factcheck_rise_rate"]), 0.95)
 
     # ─── Grader ───────────────────────────────────────────────────────────────
-
+    
     def get_grader_score(self) -> float:
-        """Calculate final grader score. Returns float strictly between 0 and 1."""
-        if self.task_id == "task1":
-            return self._grade_task1()
-        elif self.task_id == "task2":
-            return self._grade_task2()
+        """Calculate final grader score. Double-clamped for server safety."""
+        # STRICT MATCH with sir's task IDs
+        if self.task_id == "task_easy":
+            final_score = self._grade_task1()
+        elif self.task_id == "task_medium":
+            final_score = self._grade_task2()
+        elif self.task_id == "task_hard":
+            final_score = self._grade_task3()
         else:
-            return self._grade_task3()
+            final_score = 0.50 # Fallback safety
+            
+        return float(max(0.01, min(0.99, final_score)))
+    # def get_grader_score(self) -> float:
+    #     """Calculate final grader score. Returns float strictly between 0 and 1."""
+    #     if self.task_id == "task1":
+    #         return self._grade_task1()
+    #     elif self.task_id == "task2":
+    #         return self._grade_task2()
+    #     else:
+    #         return self._grade_task3()
 
     def _grade_task1(self) -> float:
         """Task 1 grader — Basic Moderation."""
@@ -570,3 +583,23 @@ class SocialMediaModerationEnvironment(Environment):
         score = ((0.40 * campaign_detection) + (0.35 * non_campaign_accuracy) + (0.25 * harm_reduction) - protection_penalty)
         # THE FIX: Clamp strictly between 0.001 and 0.999
         return round(max(0.001, min(0.999, score)), 3)
+
+# ─── External Graders (Strict Sir Format) ─────────────────────────────────
+
+class EasyGrader:
+    def grade(self, env, *args, **kwargs) -> float:
+        """Grader for task_easy"""
+        raw_score = env._grade_task1()
+        return float(max(0.01, min(0.99, raw_score)))
+
+class MediumGrader:
+    def grade(self, env, *args, **kwargs) -> float:
+        """Grader for task_medium"""
+        raw_score = env._grade_task2()
+        return float(max(0.01, min(0.99, raw_score)))
+
+class HardGrader:
+    def grade(self, env, *args, **kwargs) -> float:
+        """Grader for task_hard"""
+        raw_score = env._grade_task3()
+        return float(max(0.01, min(0.99, raw_score)))
