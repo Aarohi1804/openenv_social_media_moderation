@@ -29,26 +29,7 @@ tasks:
     name: Campaign Detection
     difficulty: hard
     grader: server.social_media_moderation_env_environment:HardGrader
-  # - id: task1
-  #   name: Basic Moderation
-  #   difficulty: easy
-  #   description: >
-  #     Moderate 10 posts with clear signals. Agent must correctly identify
-  #     and act on obviously fake posts while leaving real posts alone.
-  # - id: task2
-  #   name: Balancing Act
-  #   difficulty: medium
-  #   description: >
-  #     Moderate 15 posts with overlapping signals and adversarial reporting.
-  #     Agent must balance containing fake posts while avoiding over-moderation
-  #     of real posts that look suspicious.
-  # - id: task3
-  #   name: Campaign Detection
-  #   difficulty: hard
-  #   description: >
-  #     Moderate 20 posts including a coordinated misinformation campaign of
-  #     5 secretly linked posts. Agent must detect the campaign pattern while
-  #     handling noisy signals and frequent adversarial reporting.
+    
 observation_space:
   misinfo_probability: "float [0.0, 1.0]"
   virality_score: "float [0.0, 1.0]"
