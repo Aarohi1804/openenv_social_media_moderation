@@ -37,43 +37,22 @@ tasks:
       Moderate 20 posts including a coordinated misinformation campaign of
       5 secretly linked posts. Agent must detect the campaign pattern while
       handling noisy signals and frequent adversarial reporting.
-# tasks:
-#   - id: task1
-#     name: Basic Moderation
-#     difficulty: easy
-#     description: >
-#       Moderate 10 posts with clear signals. Agent must correctly identify
-#       and act on obviously fake posts while leaving real posts alone.
-#   - id: task2
-#     name: Balancing Act
-#     difficulty: medium
-#     description: >
-#       Moderate 15 posts with overlapping signals and adversarial reporting.
-#       Agent must balance containing fake posts while avoiding over-moderation
-#       of real posts that look suspicious.
-#   - id: task3
-#     name: Campaign Detection
-#     difficulty: hard
-#     description: >
-#       Moderate 20 posts including a coordinated misinformation campaign of
-#       5 secretly linked posts. Agent must detect the campaign pattern while
-#       handling noisy signals and frequent adversarial reporting.
 observation_space:
-  misinfo_probability: "float [0.0, 1.0] - Estimated probability of misinformation"
-  virality_score: "float [0.0, 1.0] - Current spread level"
-  spread_velocity: "float [0.0, 1.0] - Rate of virality growth"
-  report_count: "int [0, 200] - Total user reports"
-  trusted_report_count: "int [0, 50] - Reports from credible users only"
-  reporter_trust: "float [0.0, 1.0] - Trust of highest credibility reporter"
-  user_credibility: "float [0.0, 1.0] - Trustworthiness of poster"
-  is_repeat_offender: "bool - Whether user has been actioned before"
-  factcheck_confidence: "float [0.0, 1.0] - Fact-checker review progress"
-  content_category: "str - health | politics | entertainment | finance"
+  misinfo_probability: "float [0.0, 1.0]"
+  virality_score: "float [0.0, 1.0]"
+  spread_velocity: "float [0.0, 1.0]"
+  report_count: "int [0, 200]"
+  trusted_report_count: "int [0, 50]"
+  reporter_trust: "float [0.0, 1.0]"
+  user_credibility: "float [0.0, 1.0]"
+  is_repeat_offender: "bool"
+  factcheck_confidence: "float [0.0, 1.0]"
+  content_category: "str"
+  step_number: "int"
+  posts_remaining: "int"
 action_space:
   - ALLOW
   - LABEL_WARNING
   - REDUCE_REACH
   - DELETE
   - ESCALATE
-
-

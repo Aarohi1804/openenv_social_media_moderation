@@ -168,50 +168,106 @@ class SocialMediaModerationEnvironment(Environment):
 
     # ─── Step ─────────────────────────────────────────────────────────────────
 
+    # def step(self, action: ModerationAction, **kwargs) -> ModerationObservation:
+    #     """Process agent's moderation action on current post."""
+    #     self._state.step_count += 1
+    #     chosen_action = action.action
+    #     self._action_history.append(chosen_action)
+
+    #     post = self._posts[self._current_post_index]
+
+    #     self._resolve_escalations()
+
+    #     reward = self._calculate_reward(chosen_action, post)
+    #     self._update_tracking(chosen_action, post)
+    #     reward += self._check_degenerate_behaviour(chosen_action)
+
+    #     if reward < 0:
+    #         self._cumulative_harm += abs(reward)
+
+    #     self._current_post_index += 1
+
+    #     total_posts = self.config["total_posts"]
+    #     episode_done = (
+    #         self._current_post_index >= total_posts
+    #         or self._cumulative_harm >= HARM_THRESHOLD
+    #     )
+
+    #     if episode_done:
+    #         if self._delete_count > total_posts * 0.8:
+    #             reward -= 0.5
+
+    #     if episode_done:
+    #         obs = self._make_observation(
+    #             self._current_post_index - 1,
+    #             reward=reward,
+    #             done=True
+    #         )
+    #     else:
+    #         obs = self._make_observation(
+    #             self._current_post_index,
+    #             reward=reward,
+    #             done=False
+    #         )
+
+    #     return obs
+    # # Existing logic...
+    #     raw_reward = self._calculate_reward(chosen_action, post)
+    #     raw_reward += self._check_degenerate_behaviour(chosen_action)
+
+    #     # Normalize reward from [-2.0, 2.0] range to [0.01, 0.99]
+    #     normalized_reward = round(max(0.01, min(0.99, (raw_reward + 2.0) / 4.0)), 3)
+
+    #     return self._make_observation(
+    #         self._current_post_index if not episode_done else self._current_post_index - 1,
+    #         reward=normalized_reward,
+    #         done=episode_done
+    #     )
     def step(self, action: ModerationAction, **kwargs) -> ModerationObservation:
-        """Process agent's moderation action on current post."""
+        """Process agent's moderation action on current post with normalized rewards."""
         self._state.step_count += 1
         chosen_action = action.action
         self._action_history.append(chosen_action)
 
+        # Get the current post
         post = self._posts[self._current_post_index]
 
+        # Resolve any past escalations
         self._resolve_escalations()
 
-        reward = self._calculate_reward(chosen_action, post)
+        # 1. Calculate RAW rewards for internal logic
+        raw_reward = self._calculate_reward(chosen_action, post)
         self._update_tracking(chosen_action, post)
-        reward += self._check_degenerate_behaviour(chosen_action)
+        raw_reward += self._check_degenerate_behaviour(chosen_action)
 
-        if reward < 0:
-            self._cumulative_harm += abs(reward)
+        # 2. Track harm using raw negative values
+        if raw_reward < 0:
+            self._cumulative_harm += abs(raw_reward)
 
         self._current_post_index += 1
-
         total_posts = self.config["total_posts"]
+        
+        # 3. Check if episode is done
         episode_done = (
             self._current_post_index >= total_posts
             or self._cumulative_harm >= HARM_THRESHOLD
         )
 
-        if episode_done:
-            if self._delete_count > total_posts * 0.8:
-                reward -= 0.5
+        # Apply end-of-episode penalty to raw reward if over-deleting
+        if episode_done and self._delete_count > total_posts * 0.8:
+            raw_reward -= 0.5
 
-        if episode_done:
-            obs = self._make_observation(
-                self._current_post_index - 1,
-                reward=reward,
-                done=True
-            )
-        else:
-            obs = self._make_observation(
-                self._current_post_index,
-                reward=reward,
-                done=False
-            )
+        # 4. THE KEY FIX: Normalize the reward for the validator
+        # Maps raw range [approx -2.5 to 1.5] into [0.01, 0.99]
+        normalized_reward = round(max(0.01, min(0.99, (raw_reward + 2.5) / 5.0)), 3)
 
-        return obs
-
+        # 5. Return observation with the NORMALIZED reward
+        # This ensures the "Out of range" error is physically impossible to trigger.
+        return self._make_observation(
+            self._current_post_index if not episode_done else self._current_post_index - 1,
+            reward=normalized_reward,
+            done=episode_done
+        )
     # ─── State ────────────────────────────────────────────────────────────────
 
     @property
