@@ -17,20 +17,20 @@ tags:
   - reinforcement-learning
   - social-media
 tasks:
-  - id: 1
+  - id: task1
     name: Basic Moderation
     difficulty: easy
     description: >
       Moderate 10 posts with clear signals. Agent must correctly identify
       and act on obviously fake posts while leaving real posts alone.
-  - id: 2
+  - id: task2
     name: Balancing Act
     difficulty: medium
     description: >
       Moderate 15 posts with overlapping signals and adversarial reporting.
       Agent must balance containing fake posts while avoiding over-moderation
       of real posts that look suspicious.
-  - id: 3
+  - id: task3
     name: Campaign Detection
     difficulty: hard
     description: >
