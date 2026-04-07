@@ -1,8 +1,5 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
-#
-# This source code is licensed under the BSD-style license found in the
-# LICENSE file in the root directory of this source tree.
 
 import random
 import uuid
@@ -11,25 +8,17 @@ import os
 from typing import Dict, List, Optional
 
 # ─── INDESTRUCTIBLE IMPORT FIX ──────────────────────────────────────────────
-# This ensures the server can find 'models.py' no matter how it starts the app.
-current_dir = os.path.dirname(os.path.abspath(__file__))
-if current_dir not in sys.path:
-    sys.path.append(current_dir)
+# Point Python to the root directory so it can find models.py
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if root_dir not in sys.path:
+    sys.path.append(root_dir)
 
+# Import models directly from the root
+from models import ModerationAction, ModerationObservation
 from openenv.core.env_server.interfaces import Environment
 from openenv.core.env_server.types import State
 
-try:
-    # 1. Try the Scaler server's absolute path
-    from server.models import ModerationAction, ModerationObservation
-except ImportError:
-    try:
-        # 2. Try the local root path
-        from models import ModerationAction, ModerationObservation
-    except ImportError:
-        # 3. Final fallback
-        from .models import ModerationAction, ModerationObservation
-
+# ─── Constants ────────────────────────────────────────────────────────────────
 # ─── Constants ────────────────────────────────────────────────────────────────
 
 CONTENT_CATEGORIES = ["health", "politics", "entertainment", "finance"]
