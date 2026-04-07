@@ -111,13 +111,17 @@ async def main() -> None:
                 log_step(step=step, action=action_str, reward=reward, done=result.done, error=None)
 
             # Calculation for the summary report
+           # Calculation for the summary report
             if rewards:
-                score = sum(rewards) / len(rewards) # Average reward
-                score = min(max(score, 0.0), 1.0)   # Clamp between 0 and 1
+                raw_score = sum(rewards) / len(rewards)
+                # SIR'S FIX: Strict clamp
+                score = float(max(0.01, min(0.99, raw_score))) 
+            else:
+                score = 0.01 # Fallback for empty input
             
             success = score >= SUCCESS_SCORE_THRESHOLD
 
-            # UPDATED: Renamed to inference_results.json for consistency
+            # Save the outputs properly
             os.makedirs("outputs", exist_ok=True)
             with open("outputs/inference_results.json", "w") as f:
                 json.dump({"score": score, "steps": steps_taken, "rewards": rewards}, f)

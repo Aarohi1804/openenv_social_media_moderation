@@ -18,18 +18,11 @@ tags:
   - social-media
 tasks:
   - id: task_easy
-    name: Basic Moderation
-    difficulty: easy
     grader: server.social_media_moderation_env_environment:EasyGrader
   - id: task_medium
-    name: Balancing Act
-    difficulty: medium
     grader: server.social_media_moderation_env_environment:MediumGrader
   - id: task_hard
-    name: Campaign Detection
-    difficulty: hard
     grader: server.social_media_moderation_env_environment:HardGrader
-    
 observation_space:
   misinfo_probability: "float [0.0, 1.0]"
   virality_score: "float [0.0, 1.0]"

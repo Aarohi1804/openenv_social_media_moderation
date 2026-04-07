@@ -170,7 +170,7 @@ class SocialMediaModerationEnvironment(Environment):
     def state(self) -> State: return self._state
 
     def _generate_posts(self) -> List[Dict]:
-        
+
         config = self.config
         total = config["total_posts"]
         fake_indices = set(random.sample(range(total), int(total * config["fake_ratio"])))
@@ -296,16 +296,35 @@ class SocialMediaModerationEnvironment(Environment):
         p_pen = 0.3 if r_prot < 0.4 else (0.15 if r_prot < 0.6 else 0.0)
         return round(max(0.001, min(0.999, (0.4 * camp) + (0.35 * n_camp_acc) + (0.25 * h_red) - p_pen)), 3)
 
-# ─── EXTERNAL GRADERS (STRICT FORMAT) ─────────────────────────────────────
+
+# ─── EXTERNAL GRADERS (STRICT FORMAT WITH SAFETY NET) ─────────────────────
+
+# ─── EXTERNAL GRADERS (SIR'S EDGE-CASE FIX) ───────────────────────────────
 
 class EasyGrader:
     def grade(self, env, *args, **kwargs) -> float:
-        return float(max(0.01, min(0.99, env._grade_task1())))
+        try:
+            real_env = getattr(env, "unwrapped", env)
+            raw_score = float(real_env._grade_task1())
+            return max(0.01, min(0.99, raw_score))
+        except Exception:
+            # Handles Sir's "empty input" edge cases safely
+            return 0.01
 
 class MediumGrader:
     def grade(self, env, *args, **kwargs) -> float:
-        return float(max(0.01, min(0.99, env._grade_task2())))
+        try:
+            real_env = getattr(env, "unwrapped", env)
+            raw_score = float(real_env._grade_task2())
+            return max(0.01, min(0.99, raw_score))
+        except Exception:
+            return 0.01
 
 class HardGrader:
     def grade(self, env, *args, **kwargs) -> float:
-        return float(max(0.01, min(0.99, env._grade_task3())))
+        try:
+            real_env = getattr(env, "unwrapped", env)
+            raw_score = float(real_env._grade_task3())
+            return max(0.01, min(0.99, raw_score))
+        except Exception:
+            return 0.01
