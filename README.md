@@ -35,6 +35,24 @@ Content moderation at this scale is **impossible for humans alone**. But trainin
 Real platforms like Meta, Twitter/X, and YouTube face this exact trilemma daily: **speed vs. accuracy vs. fairness**. This environment operationalizes that trilemma as a learnable RL problem.
 
 ---
+## 🚀 Official Demo Script (`inference.py`)
+
+> **💡 NOTE: The `inference.py` file located in the root directory serves as the official end-to-end demo scripT.**
+
+To satisfy the hackathon demo requirements, `inference.py` does the following:
+1. Initializes the OpenEnv environment locally.
+2. Connects a mock LLM agent (via the OpenAI-compatible Groq API).
+3. Executes a full episode across all three tasks (`task_easy`, `task_medium`, `task_hard`).
+4. Prints the required `[START]`, `[STEP]`, and `[END]` structured logs to stdout.
+5. Demonstrates the complete grading, reward clamping, and edge-case handling flow.
+
+### How to reproduce the demo locally:
+
+**1. Install minimal dependencies:**
+```bash
+pip install -r requirements.txt
+
+---
 
 ## What This Environment Is
 
