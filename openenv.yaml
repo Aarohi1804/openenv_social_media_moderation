@@ -3,7 +3,7 @@ name: social_media_moderation_env
 type: space
 runtime: fastapi
 app: server.app:app
-port: 8000
+port: 7860
 description: >
   A social media content moderation environment where an AI agent learns
   to make strategic decisions about incoming posts that may contain
@@ -36,6 +36,7 @@ observation_space:
   content_category: "str"
   step_number: "int"
   posts_remaining: "int"
+  environment_warning: "str"
 action_space:
   - ALLOW
   - LABEL_WARNING

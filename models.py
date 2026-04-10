@@ -129,3 +129,9 @@ class ModerationObservation(Observation):
         default=0,
         description="Number of posts remaining in this episode"
     )
+
+    # 🚨 ADVANCED THREAT INTELLIGENCE (PHASE 3 WINNER) 🚨
+    environmental_warning: str = Field(
+        default="None",
+        description="System-level alerts regarding anomalous behavior, such as coordinated bot network attacks."
+    )

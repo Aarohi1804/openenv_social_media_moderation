@@ -159,7 +159,6 @@ class SocialMediaModerationEnvironment(Environment):
     def state(self) -> State: return self._state
 
     def _generate_posts(self) -> List[Dict]:
-
         config = self.config
         total = config["total_posts"]
         fake_indices = set(random.sample(range(total), int(total * config["fake_ratio"])))
@@ -170,24 +169,36 @@ class SocialMediaModerationEnvironment(Environment):
             is_campaign = i in campaign_indices
             is_repeat = random.random() < config["repeat_offender_prob"]
             category = random.choice(CONTENT_CATEGORIES)
-            virality = random.uniform(0.4, 1.0) if is_fake else random.uniform(0.0, 0.7)
-            spread_vel = min(virality * random.uniform(0.5, 1.5), 1.0)
-            user_cred = random.uniform(0.1, 0.4) if is_repeat else random.uniform(0.4, 1.0)
-            base_prob = random.uniform(0.6, 0.95) if is_fake else random.uniform(0.05, 0.45)
-            misinfo_prob = max(0.0, min(1.0, base_prob + random.uniform(-config["signal_noise"], config["signal_noise"])))
-            is_brigaded = not is_fake and random.random() < config["adversarial_report_prob"]
-            base_reps = int(virality * 100)
-            if is_fake:
-                reps, treps, trust = base_reps + random.randint(20, 80), random.randint(2, 10), random.uniform(0.5, 0.9)
-            elif is_brigaded:
-                reps, treps, trust = base_reps + random.randint(50, 150), random.randint(0, 2), random.uniform(0.1, 0.3)
+            
+            # 🚨 BOT ATTACK INJECTION: Extreme values for campaign posts
+            if is_campaign:
+                virality = 0.99
+                spread_vel = 0.99
+                user_cred = 0.02
+                misinfo_prob = 0.98
+                reps, treps, trust = 850, 45, 0.95 
+                is_brigaded = True
             else:
-                reps, treps, trust = base_reps + random.randint(0, 30), random.randint(0, 3), random.uniform(0.3, 0.7)
+                # Normal generation
+                virality = random.uniform(0.4, 1.0) if is_fake else random.uniform(0.0, 0.7)
+                spread_vel = min(virality * random.uniform(0.5, 1.5), 1.0)
+                user_cred = random.uniform(0.1, 0.4) if is_repeat else random.uniform(0.4, 1.0)
+                base_prob = random.uniform(0.6, 0.95) if is_fake else random.uniform(0.05, 0.45)
+                misinfo_prob = max(0.0, min(1.0, base_prob + random.uniform(-config["signal_noise"], config["signal_noise"])))
+                is_brigaded = not is_fake and random.random() < config["adversarial_report_prob"]
+                base_reps = int(virality * 100)
+                if is_fake:
+                    reps, treps, trust = base_reps + random.randint(20, 80), random.randint(2, 10), random.uniform(0.5, 0.9)
+                elif is_brigaded:
+                    reps, treps, trust = base_reps + random.randint(50, 150), random.randint(0, 2), random.uniform(0.1, 0.3)
+                else:
+                    reps, treps, trust = base_reps + random.randint(0, 30), random.randint(0, 3), random.uniform(0.3, 0.7)
+            
             posts.append({
                 "is_fake": is_fake, "is_campaign": is_campaign, "is_brigaded": is_brigaded,
                 "true_virality": virality, "misinfo_probability": round(misinfo_prob, 3),
                 "virality_score": round(virality, 3), "spread_velocity": round(spread_vel, 3),
-                "report_count": min(reps, 200), "trusted_report_count": treps,
+                "report_count": min(reps, 1000), "trusted_report_count": treps,
                 "reporter_trust": round(trust, 3), "user_credibility": round(user_cred, 3),
                 "is_repeat_offender": is_repeat, "content_category": category,
             })
@@ -240,6 +251,13 @@ class SocialMediaModerationEnvironment(Environment):
         p_idx = min(post_index, len(self._posts) - 1)
         post, step = self._posts[p_idx], self._state.step_count
         fc = 0.1 if post.get("is_campaign") else min(0.1 + (step * self.config["factcheck_rise_rate"]), 0.95)
+        
+        # 🚨 TRIGGER THE RED ALERT FOR THE LLM
+        if post.get("is_campaign"):
+            warning_msg = "CRITICAL ALERT: 5,430 identical posts detected from highly suspicious accounts in the last 12 seconds. Coordinated botnet attack in progress."
+        else:
+            warning_msg = "None"
+
         return ModerationObservation(
             misinfo_probability=post["misinfo_probability"], virality_score=post["virality_score"],
             spread_velocity=post["spread_velocity"], report_count=post["report_count"],
@@ -247,6 +265,7 @@ class SocialMediaModerationEnvironment(Environment):
             user_credibility=post["user_credibility"], is_repeat_offender=post["is_repeat_offender"],
             factcheck_confidence=round(fc, 3), content_category=post["content_category"],
             step_number=step, posts_remaining=max(0, self.config["total_posts"] - p_idx - 1),
+            environmental_warning=warning_msg, # <-- LOOPHOLE CLOSED
             done=done, reward=reward,
         )
 

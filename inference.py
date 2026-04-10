@@ -2,6 +2,7 @@ import asyncio
 import os
 import json
 import sys
+import re # Added for regex validation of logs
 from typing import List, Optional
 from openai import OpenAI
 
@@ -27,13 +28,17 @@ MAX_STEPS = 20
 TEMPERATURE = 0.0 
 SUCCESS_SCORE_THRESHOLD = 0.5 
 
-SYSTEM_PROMPT = """You are an AI content moderator.
-Respond with ONLY ONE of these words: ALLOW, LABEL_WARNING, REDUCE_REACH, DELETE, ESCALATE.
-Rules:
-1. If misinfo_probability > 0.65: DELETE.
-2. If misinfo_probability 0.50-0.65: REDUCE_REACH.
-3. If misinfo_probability < 0.50: ALLOW.
-4. If factcheck_confidence < 0.3 AND unsure: ESCALATE."""
+SYSTEM_PROMPT = """You are a Senior Trust & Safety AI Moderator.
+Your job is to analyze social media observations for misinformation, bot campaigns, and policy violations.
+
+First, write a 1-2 sentence internal thought process analyzing the nuance, user history, and potential harm of the observation.
+Then, on a new line, output your final decision wrapped in exact brackets.
+
+Valid decisions: [ALLOW], [LABEL_WARNING], [REDUCE_REACH], [DELETE], [ESCALATE].
+
+Example:
+Thought: The misinformation probability is 0.68, which crosses the strict threshold. The user has a low trust score, indicating a potential coordinated bot network.
+Decision: [DELETE]"""
 
 # ─── STRICT RULE COMPLIANCE: LOGGING FORMAT ───────────────────────────────────
 def log_start(task: str, env: str, model: str) -> None:
@@ -62,16 +67,23 @@ def get_model_action(client: OpenAI, obs) -> str:
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": obs_text},
             ],
-            temperature=TEMPERATURE,
-            max_tokens=10,
+            temperature=0.1, # Slight bump for reasoning variance
+            max_tokens=150,  # CRITICAL: Given room to think
         )
-        action = completion.choices[0].message.content.strip().upper()
-        for valid in ["ALLOW", "LABEL_WARNING", "REDUCE_REACH", "DELETE", "ESCALATE"]:
-            if valid in action: return valid
+        raw_output = completion.choices[0].message.content.strip()
+        
+        # The Regex Sniper: Looks specifically for a valid action wrapped in brackets
+        match = re.search(r'\[(ALLOW|LABEL_WARNING|REDUCE_REACH|DELETE|ESCALATE)\]', raw_output, re.IGNORECASE)
+        
+        if match:
+            return match.group(1).upper()
             
-        return "ALLOW"
-    except Exception:
-        return "ALLOW"
+        # If the LLM goes rogue and doesn't use brackets, default to safety
+        return "ESCALATE" 
+        
+    except Exception as e:
+        # Real enterprise systems fail safely
+        return "ESCALATE"
 
 async def main() -> None:
     # Initialize client exactly as requested
