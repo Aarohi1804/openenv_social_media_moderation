@@ -11,10 +11,15 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from models import ModerationAction
 from client import SocialMediaModerationEnv
 
-# ─── MODERATOR MANDATORY CONFIGURATION ────────────────────────────────────────
-API_KEY = os.getenv("HF_TOKEN") or os.getenv("OPENAI_API_KEY")
-API_BASE_URL = os.getenv("API_BASE_URL") or "https://api.groq.com/openai/v1"
-MODEL_NAME = os.getenv("MODEL_NAME") or "llama-3.3-70b-versatile"
+# ─── STRICT RULE COMPLIANCE: ENVIRONMENT VARIABLES ─────────────────────────────
+# MUST match the exact logic from the email guidelines
+API_BASE_URL = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
+MODEL_NAME = os.getenv("MODEL_NAME", "llama-3.3-70b-versatile")
+HF_TOKEN = os.getenv("HF_TOKEN")
+
+if HF_TOKEN is None:
+    raise ValueError("HF_TOKEN environment variable is required")
+
 ENV_URL = os.getenv("ENV_URL", "http://localhost:8000") 
 BENCHMARK = "social-media-moderation-env"
 
@@ -30,7 +35,7 @@ Rules:
 3. If misinfo_probability < 0.50: ALLOW.
 4. If factcheck_confidence < 0.3 AND unsure: ESCALATE."""
 
-# ─── MANDATORY LOGGING FORMAT (FLUSH=TRUE) ────────────────────────────────────
+# ─── STRICT RULE COMPLIANCE: LOGGING FORMAT ───────────────────────────────────
 def log_start(task: str, env: str, model: str) -> None:
     print(f"[START] task={task} env={env} model={model}", flush=True)
 
@@ -39,10 +44,10 @@ def log_step(step: int, action: str, reward: float, done: bool, error: Optional[
     done_val = str(done).lower()
     print(f"[STEP] step={step} action={action} reward={reward:.2f} done={done_val} error={error_val}", flush=True)
 
-def log_end(success: bool, steps: int, score: float, rewards: List[float], task: str) -> None:
+def log_end(success: bool, steps: int, rewards: List[float]) -> None:
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
-    # MODERATOR FIX: Adding task to the END log just to be super safe
-    print(f"[END] task={task} success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}", flush=True)
+    # REMOVED task and score variables to perfectly match the required regex
+    print(f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str}", flush=True)
 
 def get_model_action(client: OpenAI, obs) -> str:
     try:
@@ -63,14 +68,15 @@ def get_model_action(client: OpenAI, obs) -> str:
         action = completion.choices[0].message.content.strip().upper()
         for valid in ["ALLOW", "LABEL_WARNING", "REDUCE_REACH", "DELETE", "ESCALATE"]:
             if valid in action: return valid
+            
         return "ALLOW"
     except Exception:
         return "ALLOW"
 
 async def main() -> None:
-    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+    # Initialize client exactly as requested
+    client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
     
-    # MODERATOR FIX: We must test ALL 3 tasks, and the IDs must match YAML exactly.
     tasks_to_test = ["task_easy", "task_medium", "task_hard"]
     
     async with SocialMediaModerationEnv(base_url=ENV_URL) as env:
@@ -80,7 +86,6 @@ async def main() -> None:
             score = 0.01
             success = False
             
-            # 1. Print exact [START] log
             log_start(task=current_task, env=BENCHMARK, model=MODEL_NAME)
 
             try:
@@ -96,7 +101,6 @@ async def main() -> None:
                     steps_taken = step
                     log_step(step=step, action=action_str, reward=reward, done=result.done, error=None)
 
-                # 2. Strict clamp calculation
                 if rewards:
                     raw_score = sum(rewards) / len(rewards)
                     score = float(max(0.01, min(0.99, raw_score))) 
@@ -106,11 +110,11 @@ async def main() -> None:
                 success = score >= SUCCESS_SCORE_THRESHOLD
 
             except Exception as e:
-                print(f"Error during inference: {e}")
-                score = 0.01 # Fallback for safety
+                # Do not print random python errors to stdout, it might break the bot's log parser
+                pass
             finally:
-                # 3. Print exact [END] log
-                log_end(success=success, steps=steps_taken, score=score, rewards=rewards, task=current_task)
+                # Log end with EXACT formatting
+                log_end(success=success, steps=steps_taken, rewards=rewards)
 
 if __name__ == "__main__":
     asyncio.run(main())
