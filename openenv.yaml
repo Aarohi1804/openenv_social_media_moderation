@@ -36,7 +36,9 @@ observation_space:
   content_category: "str"
   step_number: "int"
   posts_remaining: "int"
-  environment_warning: "str"
+  environmental_warning: "str"
+  user_id: "str"
+  dynamic_reputation: "float [0.0, 1.0]"
 action_space:
   - ALLOW
   - LABEL_WARNING

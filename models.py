@@ -135,3 +135,14 @@ class ModerationObservation(Observation):
         default="None",
         description="System-level alerts regarding anomalous behavior, such as coordinated bot network attacks."
     )
+    # Inside ModerationObservation class in models.py
+    user_id: str = Field(
+        default="unknown",
+        description="Unique identifier for the user who created the post."
+    )
+    dynamic_reputation: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="The user's real-time trust score based on their history in this episode."
+    )
