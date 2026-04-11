@@ -18,21 +18,7 @@ tags:
 # 🛡️ Social Media Moderation Environment
  
 > *A Reinforcement Learning training ground where AI learns to protect communities from misinformation — without silencing real voices.*
- 
----
- 
-## Validation Status
- 
-```
-[OK] All 3/3 OpenEnv checks passed
-[OK] HF Space live — responds to /reset
-[OK] Docker build succeeded
-[OK] social_media_moderation: Ready for multi-mode deployment
-```
- 
-`[IMAGE: VALIDATION_PASSED] — Screenshot of the 3/3 PASSED OpenEnv validation terminal output.`
- 
-`[IMAGE: DASHBOARD_SUCCESS] — Screenshot of the Hugging Face Space "Running" badge.`
+
  
 ---
  
