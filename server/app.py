@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+
 import sys
 import os
 
@@ -54,7 +54,7 @@ def get_tasks():
         "action_schema": ModerationAction.model_json_schema()
     }
 
-# ─── THE SENIOR'S EXACT FIX ──────────────────────────────────────────────────
+# ─── THE EXACT FIX ──────────────────────────────────────────────────
 @app.get("/grader")
 def get_grader():
     try:
