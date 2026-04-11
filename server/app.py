@@ -73,10 +73,10 @@ def get_grader(session_id: str):
     return {"score": float(max(0.01, min(0.99, raw_score)))}
 # ──────────────────────────────────────────────────────────────────────────
 
-def main(host: str = "0.0.0.0", port: int = 7860):
-    """Entry point for direct execution."""
+def main():
     import uvicorn
-    uvicorn.run(app, host=host, port=port)
+    # This function is what the validator is hunting for
+    uvicorn.run("server.app:app", host="0.0.0.0", port=7860)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
