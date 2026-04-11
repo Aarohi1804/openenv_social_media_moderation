@@ -4,7 +4,7 @@ import uuid
 import sys
 import os
 import traceback
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if root_dir not in sys.path:
@@ -13,6 +13,16 @@ if root_dir not in sys.path:
 from models import ModerationAction, ModerationObservation
 from openenv.core.env_server.interfaces import Environment
 from openenv.core.env_server.types import State
+
+# --- SENIOR'S EPSILON CLAMPING (PHASE 2 FIX) ---
+def clamp_score(score: float) -> float:
+    """Ensures score is strictly between 0 and 1 (e.g., 0.001 to 0.999)."""
+    epsilon = 0.001
+    try:
+        val = float(score)
+    except (ValueError, TypeError):
+        return epsilon
+    return max(epsilon, min(1.0 - epsilon, val))
 
 CONTENT_CATEGORIES = ["health", "politics", "entertainment", "finance"]
 HIGH_RISK_CATEGORIES = ["health", "politics"]
@@ -27,9 +37,11 @@ HARM_THRESHOLD = 5.0
 
 class SocialMediaModerationEnvironment(Environment):
     SUPPORTS_CONCURRENT_SESSIONS: bool = True
+    
     @property
     def state(self) -> State:
         return self._state
+
     def _normalize_task_id(self, task_id: str) -> str:
         tid = str(task_id).lower().strip()
         if tid in ["task_easy", "task1", "1", "easy"]: return "task_easy"
@@ -37,124 +49,95 @@ class SocialMediaModerationEnvironment(Environment):
         elif tid in ["task_hard", "task3", "3", "hard"]: return "task_hard"
         return "task_easy"
 
-    # 🚨 SCRUBBED: Zero kwargs.
-    def __init__(self, task_id: str = "task_easy"): 
+    def __init__(self, task_id: str = "task_easy"):
         try:
             self.task_id = self._normalize_task_id(task_id)
             self.config = TASK_CONFIGS[self.task_id]
-            self._state = State(episode_id=str(uuid.uuid4()), step_count=0)
-            self._posts: List[Dict] = []
-            self._current_post_index: int = 0
-            self._cumulative_harm: float = 0.0
-            self._consecutive_same_action: int = 0
-            self._last_action: Optional[str] = None
-            self._delete_count: int = 0
-            self._escalated_posts: Dict[int, int] = {}
-            self._action_history: List[str] = []
-            self._total_posts_processed: int = 0
-            self._fake_posts_actioned: int = 0
-            self._real_posts_protected: int = 0
-            self._total_fake: int = 0
-            self._total_real: int = 0
-            self._early_actions: int = 0
-            self._campaign_posts_actioned: int = 0
-            self._total_spread_allowed: float = 0.0
-            self.user_registry = {} 
-            self._actual_campaign_posts = 0
+            self.reset()
         except Exception as e:
-            print("🚨 CRASH IN __init__ 🚨", file=sys.stderr)
             traceback.print_exc(file=sys.stderr)
             raise e
 
-    # 🚨 SCRUBBED: Zero kwargs.
     def reset(self, seed: int = 42, task_id: Optional[str] = None) -> ModerationObservation:
-        try:
-            random.seed(seed)
-            if task_id is not None:
-                self.task_id = self._normalize_task_id(task_id)
-                self.config = TASK_CONFIGS[self.task_id]
+        random.seed(seed)
+        if task_id is not None:
+            self.task_id = self._normalize_task_id(task_id)
+            self.config = TASK_CONFIGS[self.task_id]
 
-            self._state = State(episode_id=str(uuid.uuid4()), step_count=0)
-            self._current_post_index = 0
-            self._cumulative_harm = 0.0
-            self._consecutive_same_action = 0
-            self._last_action = None
-            self._delete_count = 0
-            self._escalated_posts = {}
-            self._action_history = []
-            self._total_posts_processed = 0
-            self._fake_posts_actioned = 0
-            self._real_posts_protected = 0
-            self._total_fake = 0
-            self._total_real = 0
-            self._early_actions = 0
-            self._campaign_posts_actioned = 0
-            self._total_spread_allowed = 0.0
+        self._state = State(episode_id=str(uuid.uuid4()), step_count=0)
+        self._current_post_index = 0
+        self._cumulative_harm = 0.0
+        self._consecutive_same_action = 0
+        self._last_action = None
+        self._delete_count = 0
+        self._escalated_posts = {}
+        self._action_history = []
+        self._total_posts_processed = 0
+        self._fake_posts_actioned = 0
+        self._real_posts_protected = 0
+        self._total_fake = 0
+        self._total_real = 0
+        self._early_actions = 0
+        self._campaign_posts_actioned = 0
+        self._total_spread_allowed = 0.0
+        self.user_registry = {}
+        
+        self._posts = self._generate_posts()
+        for post in self._posts:
+            if post["is_fake"]: self._total_fake += 1
+            else: self._total_real += 1
             
-            self.user_registry = {} 
-            self._posts = self._generate_posts()
-            self._actual_campaign_posts = 0
-            
-            for post in self._posts:
-                if post["is_fake"]: self._total_fake += 1
-                else: self._total_real += 1
-            return self._make_observation(0, reward=0.0, done=False)
-        except Exception as e:
-            print("🚨 CRASH IN reset 🚨", file=sys.stderr)
-            traceback.print_exc(file=sys.stderr)
-            raise e
+        return self._make_observation(0, reward=0.0, done=False)
 
-    # 🚨 SCRUBBED: Zero kwargs.
     def step(self, action: ModerationAction) -> ModerationObservation:
         self._state.step_count += 1
         chosen_action = action.action
-        self._action_history.append(chosen_action)
-        post = self._posts[self._current_post_index]
-        # self._resolve_escalations()
-
-        uid = post.get("user_id", "unknown")
-        is_fake = post["is_fake"]
         
-        if uid in self.user_registry:
-            if is_fake and chosen_action == "ALLOW":
-                self.user_registry[uid] = max(0.0, self.user_registry[uid] - 0.30)
-            elif is_fake and chosen_action in ["DELETE", "REDUCE_REACH", "LABEL_WARNING"]:
-                self.user_registry[uid] = max(0.0, self.user_registry[uid] - 0.15)
-            elif not is_fake and chosen_action == "ALLOW":
-                self.user_registry[uid] = min(1.0, self.user_registry[uid] + 0.05)
+        # Track consecutive actions for degeneracy penalty
+        if chosen_action == self._last_action:
+            self._consecutive_same_action += 1
+        else:
+            self._consecutive_same_action = 1
+        self._last_action = chosen_action
+
+        post = self._posts[self._current_post_index]
+        self._resolve_escalations()
 
         raw_reward = self._calculate_reward(chosen_action, post)
         self._update_tracking(chosen_action, post)
-        raw_reward += self._check_degenerate_behaviour(chosen_action)
         
-        if raw_reward < 0: 
+        # Apply behavior penalty
+        if self._consecutive_same_action >= 5:
+            raw_reward -= 0.2
+            
+        if raw_reward < 0:
             self._cumulative_harm += abs(raw_reward)
             
         self._current_post_index += 1
         total_posts = self.config["total_posts"]
         episode_done = (self._current_post_index >= total_posts or self._cumulative_harm >= HARM_THRESHOLD)
         
-        if episode_done and self._delete_count > total_posts * 0.8 and self._real_posts_protected < self._total_real * 0.5:
+        # Over-moderation penalty
+        if episode_done and self._delete_count > total_posts * 0.8:
             raw_reward -= 0.5
             
         normalized_reward = round(max(0.01, min(0.99, (raw_reward + 2.5) / 5.0)), 3)
-        return self._make_observation(self._current_post_index if not episode_done else self._current_post_index - 1, reward=normalized_reward, done=episode_done)
+        return self._make_observation(
+            self._current_post_index if not episode_done else self._current_post_index - 1, 
+            reward=normalized_reward, 
+            done=episode_done
+        )
 
     def _generate_posts(self) -> List[Dict]:
         config = self.config
         total = config["total_posts"]
-        # Shrink from 20 to 8 users so repeat interactions are guaranteed
-        user_pool = [f"user_{i}" for i in range(1, 9)]
+        user_pool = [f"user_{i}" for i in range(1, 21)]
         fake_indices = set(random.sample(range(total), int(total * config["fake_ratio"])))
         campaign_indices = set(random.sample(list(fake_indices), min(config["campaign_size"], len(fake_indices)))) if config["campaign_size"] > 0 else set()
-        self._actual_campaign_posts = len(campaign_indices)
-
+        
         posts = []
         for i in range(total):
             current_user_id = random.choice(user_pool)
-            if current_user_id not in self.user_registry:
-                self.user_registry[current_user_id] = 0.7 
-
             is_fake = i in fake_indices
             is_campaign = i in campaign_indices
             is_repeat = random.random() < config["repeat_offender_prob"]
@@ -166,10 +149,7 @@ class SocialMediaModerationEnvironment(Environment):
             else:
                 virality = random.uniform(0.4, 1.0) if is_fake else random.uniform(0.0, 0.7)
                 spread_vel = min(virality * random.uniform(0.5, 1.5), 1.0)
-                #user_cred = random.uniform(0.1, 0.4) if is_repeat else random.uniform(0.4, 1.0)
-                base_reputation = self.user_registry.get(current_user_id, 0.7)
-                user_cred = base_reputation * (random.uniform(0.5, 0.8) if is_repeat else random.uniform(0.8, 1.2))
-                user_cred = max(0.01, min(1.0, user_cred)) # Clamp it
+                user_cred = random.uniform(0.1, 0.4) if is_repeat else random.uniform(0.4, 1.0)
                 base_prob = random.uniform(0.6, 0.95) if is_fake else random.uniform(0.05, 0.45)
                 misinfo_prob = max(0.0, min(1.0, base_prob + random.uniform(-config["signal_noise"], config["signal_noise"])))
                 is_brigaded = not is_fake and random.random() < config["adversarial_report_prob"]
@@ -208,110 +188,67 @@ class SocialMediaModerationEnvironment(Environment):
             elif action == "ESCALATE": reward = 0.3 if self._get_current_factcheck(self._current_post_index) < 0.3 else -0.2
                 
         if action in ["DELETE", "REDUCE_REACH"] and is_fake and post["spread_velocity"] > 0.7: reward += 0.4
-        if action == "ALLOW" and is_fake: self._total_spread_allowed += virality
         return round(reward, 3)
+
     def _update_tracking(self, action: str, post: Dict) -> None:
         self._total_posts_processed += 1
         is_fake = post["is_fake"]
-
-        if action == "DELETE":
-            self._delete_count += 1
-
-        # Track successful takedowns of misinformation
-        if action in ["DELETE", "REDUCE_REACH"]:
-            if is_fake:
-                self._fake_posts_actioned += 1
-                if post.get("is_campaign"):
-                    self._campaign_posts_actioned += 1
-                if post["spread_velocity"] < 0.6:  # Caught before it went viral
-                    self._early_actions += 1
-
-        # Track successful protection of real users
+        if action == "DELETE": self._delete_count += 1
+        if action in ["DELETE", "REDUCE_REACH"] and is_fake:
+            self._fake_posts_actioned += 1
+            if post.get("is_campaign"): self._campaign_posts_actioned += 1
+            if post["spread_velocity"] < 0.6: self._early_actions += 1
         elif action == "ALLOW" and not is_fake:
             self._real_posts_protected += 1
-
-        # Track escalations
         elif action == "ESCALATE":
             self._escalated_posts[self._current_post_index] = self._state.step_count
-    def _check_degenerate_behaviour(self, action: str) -> float:
-        penalty = -0.2 if action == self._last_action and self._consecutive_same_action >= 5 else 0.0
-        self._consecutive_same_action = self._consecutive_same_action + 1 if action == self._last_action else 0
-        self._last_action = action
-        return penalty
 
-    def _make_observation(self, post_index: int, reward: float, done: bool) -> ModerationObservation:
-        p_idx = min(post_index, len(self._posts) - 1)
-        post, step = self._posts[p_idx], self._state.step_count
-        fc = 0.1 if post.get("is_campaign") else min(0.1 + (step * self.config["factcheck_rise_rate"]), 0.95)
-        
-        warning_msg = "CRITICAL ALERT: Botnet attack." if post.get("is_campaign") else "None"
-        uid = post.get("user_id", "unknown")
+    def _resolve_escalations(self):
+        # Simulation of human review resolving after 2 steps
+        to_resolve = []
+        for idx, step_started in self._escalated_posts.items():
+            if self._state.step_count - step_started >= 2:
+                to_resolve.append(idx)
+        for idx in to_resolve:
+            del self._escalated_posts[idx]
 
+    def _get_current_factcheck(self, index: int) -> float:
+        if index in self._escalated_posts: return 1.0
+        rise = self.config["factcheck_rise_rate"] * self._state.step_count
+        return min(0.95, 0.1 + rise)
+
+    def _make_observation(self, index: int, reward: float, done: bool) -> ModerationObservation:
+        post = self._posts[index]
         return ModerationObservation(
-            misinfo_probability=post["misinfo_probability"], 
+            misinfo_probability=post["misinfo_probability"],
             virality_score=post["virality_score"],
-            spread_velocity=post["spread_velocity"], 
-            report_count=post["report_count"], 
-            trusted_report_count=post["trusted_report_count"], 
+            spread_velocity=post["spread_velocity"],
+            report_count=post["report_count"],
+            trusted_report_count=post["trusted_report_count"],
             reporter_trust=post["reporter_trust"],
-            user_credibility=post["user_credibility"], 
+            user_credibility=post["user_credibility"],
             is_repeat_offender=post["is_repeat_offender"],
-            factcheck_confidence=round(fc, 3), 
+            factcheck_confidence=self._get_current_factcheck(index),
+            environmental_warning=0.8 if post["is_brigaded"] else 0.1,
             content_category=post["content_category"],
-            step_number=step, 
-            posts_remaining=max(0, self.config["total_posts"] - p_idx - 1),
-            environmental_warning=warning_msg,
-            user_id=uid,
-            dynamic_reputation=round(self.user_registry.get(uid, 0.7), 3),
-            done=done, reward=reward,
+            reward=reward,
+            done=done
         )
 
-    def _get_current_factcheck(self, post_index: int) -> float:
-        return 0.1 if self._posts[post_index].get("is_campaign") else min(0.1 + (self._state.step_count * self.config["factcheck_rise_rate"]), 0.95)
-
     def get_grader_score(self) -> float:
-        if self.task_id == "task_easy": final_score = self._grade_task1()
-        elif self.task_id == "task_medium": final_score = self._grade_task2()
-        elif self.task_id == "task_hard": final_score = self._grade_task3()
-        else: final_score = 0.5
-        return float(max(0.01, min(0.99, final_score)))
-
-    def _grade_task1(self) -> float:
-        f_ctrl = self._fake_posts_actioned / self._total_fake if self._total_fake > 0 else 0.0
-        r_prot = self._real_posts_protected / self._total_real if self._total_real > 0 else 0.0
-        penalty = 0.2 if (self._delete_count / max(self._total_posts_processed, 1)) > 0.8 else 0.0
-        return round(max(0.001, min(0.999, (0.6 * f_ctrl) + (0.4 * r_prot) - penalty)), 3)
-
-    def _grade_task2(self) -> float:
-        f_ctrl = self._fake_posts_actioned / self._total_fake if self._total_fake > 0 else 0.0
-        r_prot = self._real_posts_protected / self._total_real if self._total_real > 0 else 0.0
-        early = self._early_actions / self._total_fake if self._total_fake > 0 else 0.0
-        bal = 0.2 if (f_ctrl > 0 and r_prot < 0.3) else 0.0
-        return round(max(0.001, min(0.999, (0.5 * f_ctrl) + (0.35 * r_prot) + (0.15 * early) - bal)), 3)
-
-    def _grade_task3(self) -> float:
-        #camp = self._campaign_posts_actioned / self.config["campaign_size"] if self.config["campaign_size"] > 0 else 0.0
-        camp = self._campaign_posts_actioned / self._actual_campaign_posts if self._actual_campaign_posts > 0 else 0.0
-        n_camp_f = self._total_fake - self.config["campaign_size"]
-        n_camp_a = self._fake_posts_actioned - self._campaign_posts_actioned
-        n_camp_acc = n_camp_a / n_camp_f if n_camp_f > 0 else 0.0
-        max_spread = sum(p["true_virality"] for p in self._posts if p["is_fake"])
-        h_red = (1.0 - (self._total_spread_allowed / max_spread) if max_spread > 0 else 1.0)
-        r_prot = self._real_posts_protected / self._total_real if self._total_real > 0 else 0.0
-        p_pen = 0.3 if r_prot < 0.4 else (0.15 if r_prot < 0.6 else 0.0)
-        return round(max(0.001, min(0.999, (0.4 * camp) + (0.35 * n_camp_acc) + (0.25 * h_red) - p_pen)), 3)
-
-class EasyGrader:
-    def grade(self, env, *args, **kwargs) -> float:
-        try: return max(0.01, min(0.99, float(getattr(env, "unwrapped", env)._grade_task1())))
-        except Exception: return 0.01
-
-class MediumGrader:
-    def grade(self, env, *args, **kwargs) -> float:
-        try: return max(0.01, min(0.99, float(getattr(env, "unwrapped", env)._grade_task2())))
-        except Exception: return 0.01
-
-class HardGrader:
-    def grade(self, env, *args, **kwargs) -> float:
-        try: return max(0.01, min(0.99, float(getattr(env, "unwrapped", env)._grade_task3())))
-        except Exception: return 0.01
+        """CALLED BY SCALER PHASE 2 VALIDATOR"""
+        fake_rate = self._fake_posts_actioned / max(1, self._total_fake)
+        real_rate = self._real_posts_protected / max(1, self._total_real)
+        
+        if self.task_id == "task_easy":
+            score = (0.6 * fake_rate) + (0.4 * real_rate)
+        elif self.task_id == "task_medium":
+            early_rate = self._early_actions / max(1, self._total_fake)
+            balance_penalty = abs(fake_rate - real_rate) * 0.2
+            score = (0.5 * fake_rate) + (0.35 * real_rate) + (0.15 * early_rate) - balance_penalty
+        else: # task_hard
+            camp_rate = self._campaign_posts_actioned / max(1, self.config["campaign_size"])
+            score = (0.4 * camp_rate) + (0.35 * fake_rate) + (0.25 * real_rate)
+            if real_rate < 0.4: score -= 0.3 # Heavy penalty for censorship
+            
+        return clamp_score(score)
