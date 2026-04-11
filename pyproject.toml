@@ -1,7 +1,11 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "social_media_moderation_env"
 version = "0.1.0"
-description = "Social Media Moderation Environment"
+description = "Elite Trust & Safety Simulation for Coordinated Inauthentic Behavior (CIB) detection."
 requires-python = ">=3.10"
 dependencies = [
     "openenv-core[core]>=0.2.2",
@@ -12,6 +16,10 @@ dependencies = [
     "uvicorn[standard]>=0.24.0",
     "httpx>=0.25.0",
 ]
+
+[project.scripts]
+# This tells the validator how to start your server
+server = "server.app:app"
 
 [tool.uv]
 package = false
