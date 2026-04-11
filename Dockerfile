@@ -1,6 +1,4 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-
 ARG BASE_IMAGE=ghcr.io/meta-pytorch/openenv-base:latest
 FROM ${BASE_IMAGE} AS builder
 
@@ -11,9 +9,12 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends git && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy environment code
+# Copy everything
 COPY . /app/env
 WORKDIR /app/env
+
+# 🚨 DEBUG STEP: This will print the files in the logs so we can verify names
+RUN ls -la
 
 # Ensure uv is available
 RUN if ! command -v uv >/dev/null 2>&1; then \
@@ -22,32 +23,24 @@ RUN if ! command -v uv >/dev/null 2>&1; then \
         mv /root/.local/bin/uvx /usr/local/bin/uvx; \
     fi
 
-# 🚨 THE FINAL FIX: 
-# We bypass the "Project" logic entirely. 
-# We create a venv and use uv pip to install libraries from requirements.txt.
-# This cannot fail with a "root package" error because it doesn't look for one.
+# 🚨 THE "BULLETPROOF" INSTALL:
+# We create the venv and point uv pip directly to it. 
+# This removes all "Could not find root package" and "activate" errors.
 RUN uv venv .venv
 RUN --mount=type=cache,target=/root/.cache/uv \
-    . .venv/bin/activate && uv pip install -r requirements.txt
+    uv pip install --python .venv/bin/python -r requirements.txt
 
-# Final runtime stage
+# Final stage
 FROM ${BASE_IMAGE}
-
 WORKDIR /app
-
-# Copy the virtual environment and the code
 COPY --from=builder /app/env/.venv /app/.venv
 COPY --from=builder /app/env /app/env
 
-# Set PATH and PYTHONPATH
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app/env:$PYTHONPATH"
 
-# Health check (Pings the root / path we defined in app.py)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:7860/ || exit 1
 
 EXPOSE 7860
-
-# Run the server
 CMD ["sh", "-c", "cd /app/env && uvicorn server.app:app --host 0.0.0.0 --port 7860"]
