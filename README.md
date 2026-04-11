@@ -118,23 +118,23 @@ This is the mechanic that separates Task 3 from a simply noisier version of Task
 `ESCALATE` is not a cop-out — it is a genuine strategic instrument. The environment simulates human review with a realistic 2–3 step resolution delay: when a post is escalated, `factcheck_confidence` jumps to `1.0` after the delay, revealing ground truth. Escalating under genuine uncertainty (`factcheck_confidence < 0.3`) is rewarded; escalating when the answer is already clear (`> 0.7`) is penalized as lazy delegation.
  
 ---
- 
-## 🔭 Observation Space
- 
-The agent receives 9 signals per post. Ground truth (`is_fake`) is never exposed.
- 
+ ## 🔭 Observation Space
+
+The agent receives **11 distinct signals** per post. Ground truth (`is_fake`) is never exposed, requiring the policy to navigate genuine environmental uncertainty and adversarial noise.
+
 | Field | Type | Range | Description |
 |---|---|---|---|
-| `misinfo_probability` | float | 0.0 – 1.0 | Classifier estimate of misinformation likelihood — noisy by design |
-| `virality_score` | float | 0.0 – 1.0 | Current spread level |
-| `spread_velocity` | float | 0.0 – 1.0 | Rate at which virality is accelerating |
-| `report_count` | int | 0 – 1,000+ | Raw report volume — inflatable by botnet brigading |
-| `trusted_report_count` | int | 0 – 50 | Reports from high-credibility accounts only |
-| `reporter_trust` | float | 0.0 – 1.0 | Trust score of the single highest-credibility reporter |
-| `user_credibility` | float | 0.0 – 1.0 | Poster's historical trustworthiness |
-| `is_repeat_offender` | bool | True/False | Whether this account has been actioned before |
-| `factcheck_confidence` | float | 0.0 – 1.0 | Fact-checker review progress — frozen for campaign posts |
-| `content_category` | str | health / politics / entertainment / finance | Topic — health and politics carry elevated harm weights |
+| `misinfo_probability` | float | 0.0 – 1.0 | AI-driven classifier score; a high-variance probabilistic signal. |
+| `virality_score` | float | 0.0 – 1.0 | Metric representing total current engagement and platform reach. |
+| `spread_velocity` | float | 0.0 – 1.0 | Rate of propagation momentum; used for proactive intervention. |
+| `report_count` | int | 0 – 1,000+ | Raw user report volume; subject to adversarial botnet brigading. |
+| `trusted_report_count` | int | 0 – 50 | Filtered reports originating from high-integrity/expert user cohorts. |
+| `reporter_trust` | float | 0.0 – 1.0 | Integrity score of the primary/highest-credibility reporter. |
+| `user_credibility` | float | 0.0 – 1.0 | Historical integrity score of the account originating the content. |
+| `is_repeat_offender` | bool | True/False | Metadata flag for accounts with confirmed prior policy violations. |
+| `factcheck_confidence` | float | 0.0 – 1.0 | Internal metadata tracking human-in-the-loop audit progression. |
+| `environmental_warning`| float | 0.0 – 1.0 | System-level signal indicating active CIB (Coordinated Attack) modes. |
+| `content_category` | str | health/politics/... | Topic-based risk weighting (Health/Politics carry higher penalties). |
  
 ---
  
