@@ -60,6 +60,7 @@ class SocialMediaModerationEnvironment(Environment):
             self._campaign_posts_actioned: int = 0
             self._total_spread_allowed: float = 0.0
             self.user_registry = {} 
+            self._actual_campaign_posts = 0
         except Exception as e:
             print("🚨 CRASH IN __init__ 🚨", file=sys.stderr)
             traceback.print_exc(file=sys.stderr)
@@ -92,6 +93,7 @@ class SocialMediaModerationEnvironment(Environment):
             
             self.user_registry = {} 
             self._posts = self._generate_posts()
+            self._actual_campaign_posts = 0
             
             for post in self._posts:
                 if post["is_fake"]: self._total_fake += 1
@@ -108,7 +110,7 @@ class SocialMediaModerationEnvironment(Environment):
         chosen_action = action.action
         self._action_history.append(chosen_action)
         post = self._posts[self._current_post_index]
-        self._resolve_escalations()
+        # self._resolve_escalations()
 
         uid = post.get("user_id", "unknown")
         is_fake = post["is_fake"]
@@ -132,7 +134,7 @@ class SocialMediaModerationEnvironment(Environment):
         total_posts = self.config["total_posts"]
         episode_done = (self._current_post_index >= total_posts or self._cumulative_harm >= HARM_THRESHOLD)
         
-        if episode_done and self._delete_count > total_posts * 0.8: 
+        if episode_done and self._delete_count > total_posts * 0.8 and self._real_posts_protected < self._total_real * 0.5:
             raw_reward -= 0.5
             
         normalized_reward = round(max(0.01, min(0.99, (raw_reward + 2.5) / 5.0)), 3)
@@ -141,10 +143,12 @@ class SocialMediaModerationEnvironment(Environment):
     def _generate_posts(self) -> List[Dict]:
         config = self.config
         total = config["total_posts"]
-        user_pool = [f"user_{i}" for i in range(1, 21)]
+        # Shrink from 20 to 8 users so repeat interactions are guaranteed
+        user_pool = [f"user_{i}" for i in range(1, 9)]
         fake_indices = set(random.sample(range(total), int(total * config["fake_ratio"])))
         campaign_indices = set(random.sample(list(fake_indices), min(config["campaign_size"], len(fake_indices)))) if config["campaign_size"] > 0 else set()
-        
+        self._actual_campaign_posts = len(campaign_indices)
+
         posts = []
         for i in range(total):
             current_user_id = random.choice(user_pool)
@@ -162,7 +166,10 @@ class SocialMediaModerationEnvironment(Environment):
             else:
                 virality = random.uniform(0.4, 1.0) if is_fake else random.uniform(0.0, 0.7)
                 spread_vel = min(virality * random.uniform(0.5, 1.5), 1.0)
-                user_cred = random.uniform(0.1, 0.4) if is_repeat else random.uniform(0.4, 1.0)
+                #user_cred = random.uniform(0.1, 0.4) if is_repeat else random.uniform(0.4, 1.0)
+                base_reputation = self.user_registry.get(current_user_id, 0.7)
+                user_cred = base_reputation * (random.uniform(0.5, 0.8) if is_repeat else random.uniform(0.8, 1.2))
+                user_cred = max(0.01, min(1.0, user_cred)) # Clamp it
                 base_prob = random.uniform(0.6, 0.95) if is_fake else random.uniform(0.05, 0.45)
                 misinfo_prob = max(0.0, min(1.0, base_prob + random.uniform(-config["signal_noise"], config["signal_noise"])))
                 is_brigaded = not is_fake and random.random() < config["adversarial_report_prob"]
@@ -232,12 +239,6 @@ class SocialMediaModerationEnvironment(Environment):
         self._last_action = action
         return penalty
 
-    def _resolve_escalations(self):
-        current_step, resolved = self._state.step_count, []
-        for p_idx, e_step in self._escalated_posts.items():
-            if current_step - e_step >= 2: self._posts[p_idx]["factcheck_confidence"] = 1.0; resolved.append(p_idx)
-        for idx in resolved: del self._escalated_posts[idx]
-
     def _make_observation(self, post_index: int, reward: float, done: bool) -> ModerationObservation:
         p_idx = min(post_index, len(self._posts) - 1)
         post, step = self._posts[p_idx], self._state.step_count
@@ -250,8 +251,8 @@ class SocialMediaModerationEnvironment(Environment):
             misinfo_probability=post["misinfo_probability"], 
             virality_score=post["virality_score"],
             spread_velocity=post["spread_velocity"], 
-            report_count=min(post["report_count"], 200), 
-            trusted_report_count=min(post["trusted_report_count"], 50), 
+            report_count=post["report_count"], 
+            trusted_report_count=post["trusted_report_count"], 
             reporter_trust=post["reporter_trust"],
             user_credibility=post["user_credibility"], 
             is_repeat_offender=post["is_repeat_offender"],
@@ -289,7 +290,8 @@ class SocialMediaModerationEnvironment(Environment):
         return round(max(0.001, min(0.999, (0.5 * f_ctrl) + (0.35 * r_prot) + (0.15 * early) - bal)), 3)
 
     def _grade_task3(self) -> float:
-        camp = self._campaign_posts_actioned / self.config["campaign_size"] if self.config["campaign_size"] > 0 else 0.0
+        #camp = self._campaign_posts_actioned / self.config["campaign_size"] if self.config["campaign_size"] > 0 else 0.0
+        camp = self._campaign_posts_actioned / self._actual_campaign_posts if self._actual_campaign_posts > 0 else 0.0
         n_camp_f = self._total_fake - self.config["campaign_size"]
         n_camp_a = self._fake_posts_actioned - self._campaign_posts_actioned
         n_camp_acc = n_camp_a / n_camp_f if n_camp_f > 0 else 0.0

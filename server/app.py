@@ -27,6 +27,10 @@ app = create_app(
 )
 
 # ───  FIX: EXPLICIT ENDPOINTS ─────────────────────────
+@app.get("/")
+def health_check():
+    return {"status": "healthy", "message": "The environment is running perfectly."}
+
 @app.get("/tasks")
 def get_tasks():
     return {
@@ -53,18 +57,23 @@ def get_tasks():
         "action_schema": ModerationAction.model_json_schema()
     }
 
-@app.get("/grader")
-def get_grader():
+@app.get("/grader/{session_id}")
+def get_grader(session_id: str):
     try:
-        env_instance = list(app.state.envs.values())[0] 
+        # Fetch the exact environment instance using the session ID
+        env_instance = app.state.envs.get(session_id)
+        if not env_instance:
+            return {"score": 0.01, "error": "Session not found or already closed."}
+            
         raw_score = env_instance.get_grader_score()
-    except Exception:
+    except Exception as e:
+        print(f"Grader error: {e}")
         raw_score = 0.01
 
     return {"score": float(max(0.01, min(0.99, raw_score)))}
 # ──────────────────────────────────────────────────────────────────────────
 
-def main(host: str = "0.0.0.0", port: int = 8000):
+def main(host: str = "0.0.0.0", port: int = 7860):
     """Entry point for direct execution."""
     import uvicorn
     uvicorn.run(app, host=host, port=port)

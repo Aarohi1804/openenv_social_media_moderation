@@ -73,13 +73,11 @@ class ModerationObservation(Observation):
     report_count: int = Field(
         default=0,
         ge=0,
-        le=200,
         description="Total number of users who reported this post — can be inflated by brigading"
     )
     trusted_report_count: int = Field(
         default=0,
         ge=0,
-        le=50,
         description="Number of high-credibility reporters (trust > 0.7) who flagged this post"
     )
     reporter_trust: float = Field(
@@ -130,7 +128,7 @@ class ModerationObservation(Observation):
         description="Number of posts remaining in this episode"
     )
 
-    # 🚨 ADVANCED THREAT INTELLIGENCE (PHASE 3 WINNER) 🚨
+    # 🚨 ADVANCED THREAT INTELLIGENCE 
     environmental_warning: str = Field(
         default="None",
         description="System-level alerts regarding anomalous behavior, such as coordinated bot network attacks."

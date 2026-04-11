@@ -41,6 +41,10 @@ class SocialMediaModerationEnv(
             content_category=obs_data.get("content_category", "entertainment"),
             step_number=obs_data.get("step_number", 0),
             posts_remaining=obs_data.get("posts_remaining", 0),
+            environmental_warning=obs_data.get("environmental_warning", "None"),
+            user_id=obs_data.get("user_id", "unknown"),
+            dynamic_reputation=obs_data.get("dynamic_reputation", 0.7),
+            
             metadata=obs_data.get("metadata", {}),
             done=payload.get("done", False),
             reward=payload.get("reward"),
