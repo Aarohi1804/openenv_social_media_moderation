@@ -5,7 +5,7 @@ import sys
 from typing import List, Optional
 from openai import OpenAI
 
-# Ensure Python looks in the current directory for models
+# making sure the environment module is importable
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from models import ModerationAction
@@ -71,7 +71,7 @@ def get_model_action(client: OpenAI, obs) -> str:
 async def main() -> None:
     client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
     
-    # MODERATOR FIX: We must test ALL 3 tasks, and the IDs must match YAML exactly.
+    # Strict testing of all 3 tasks with exact logging format and clamping logic
     tasks_to_test = ["task_easy", "task_medium", "task_hard"]
     
     async with SocialMediaModerationEnv(base_url=ENV_URL) as env:
@@ -99,7 +99,7 @@ async def main() -> None:
                     
                     log_step(step=step, action=action_str, reward=reward, done=result.done, error=None)
                     
-                # 2. STRICT CLAMP CALCULATION (The April 7th Secret)
+                # 2. STRICT CLAMP CALCULATION 
                 if rewards:
                     raw_score = sum(rewards) / len(rewards)
                     score = float(max(0.01, min(0.99, raw_score)))

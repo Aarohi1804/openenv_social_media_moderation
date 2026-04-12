@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+
 import random
 import uuid
 import sys
@@ -14,7 +14,7 @@ from models import ModerationAction, ModerationObservation
 from openenv.core.env_server.interfaces import Environment
 from openenv.core.env_server.types import State
 
-# --- SENIOR'S EPSILON CLAMPING (PHASE 2 FIX) ---
+# --- CLAMPING FUNCTION ---
 def clamp_score(score: float) -> float:
     """Ensures score is strictly between 0 and 1 for Scaler validation."""
     epsilon = 0.001

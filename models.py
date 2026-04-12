@@ -14,7 +14,7 @@ class ModerationObservation(BaseModel):
     user_credibility: float
     is_repeat_offender: bool
     factcheck_confidence: float
-    environmental_warning: str  # Fixed to string type
+    environmental_warning: str  
     content_category: str
     reward: Optional[float] = 0.0
     done: Optional[bool] = False

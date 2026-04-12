@@ -1,5 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
+
 
 """Social Media Moderation Environment Client."""
 
@@ -8,7 +7,7 @@ from openenv.core import EnvClient
 from openenv.core.client_types import StepResult
 from openenv.core.env_server.types import State
 
-# Use absolute import for running as a script
+# Importing the models and environment client for the Social Media Moderation Environment
 from models import ModerationAction, ModerationObservation
 
 class SocialMediaModerationEnv(

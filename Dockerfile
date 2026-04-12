@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+
 ARG BASE_IMAGE=ghcr.io/meta-pytorch/openenv-base:latest
 FROM ${BASE_IMAGE} AS builder
 
@@ -13,7 +13,7 @@ RUN apt-get update && \
 COPY . /app/env
 WORKDIR /app/env
 
-# 🚨 DEBUG STEP: This will print the files in the logs so we can verify names
+# Print the files in the logs to ensure everything is copied correctly
 RUN ls -la
 
 # Ensure uv is available
@@ -23,9 +23,7 @@ RUN if ! command -v uv >/dev/null 2>&1; then \
         mv /root/.local/bin/uvx /usr/local/bin/uvx; \
     fi
 
-# 🚨 THE "BULLETPROOF" INSTALL:
-# We create the venv and point uv pip directly to it. 
-# This removes all "Could not find root package" and "activate" errors.
+# Create a virtual environment and install dependencies
 RUN uv venv .venv
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python -r requirements.txt

@@ -2,7 +2,7 @@
 import sys
 import os
 
-# ─── INDESTRUCTIBLE IMPORT FIX ──────────────────────────────────────────────
+# ─── IMPORT FIX ──────────────────────────────────────────────
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if root_dir not in sys.path:
     sys.path.append(root_dir)
@@ -54,17 +54,17 @@ def get_tasks():
         "action_schema": ModerationAction.model_json_schema()
     }
 
-# ─── THE EXACT FIX ──────────────────────────────────────────────────
+# ─── GRADER ENDPOINT ──────────────────────────────────────────────────
 @app.get("/grader")
 def get_grader():
     try:
-        # Grabs the running instance WITHOUT needing the session_id
+        # Grab the running instance WITHOUT needing the session_id
         env_instance = list(app.state.envs.values())[0]
         raw_score = env_instance.get_grader_score()
     except Exception:
         raw_score = 0.01
 
-    # Exact clamp from April 7th
+    # clamp
     return {"score": float(max(0.01, min(0.99, raw_score)))}
 # ─────────────────────────────────────────────────────────────────────────────
 
